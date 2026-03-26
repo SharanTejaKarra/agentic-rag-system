@@ -13,17 +13,18 @@ st.set_page_config(page_title="Agentic RAG", page_icon="?", layout="wide")
 # Sidebar navigation
 page = st.sidebar.radio("Navigation", ["Chat", "Ingestion", "Debug"])
 
-# LLM provider toggle
+# LLM provider toggle (stored per-session to avoid cross-session clobbering)
 st.sidebar.divider()
 st.sidebar.subheader("LLM Backend")
+if "llm_provider" not in st.session_state:
+    st.session_state.llm_provider = settings.llm_provider
 provider = st.sidebar.radio(
     "Provider",
     ["Anthropic Claude", "Local (Qwen)"],
-    index=0 if settings.llm_provider == "anthropic" else 1,
+    index=0 if st.session_state.llm_provider == "anthropic" else 1,
 )
-# Apply the selection to settings so client.py picks it up
-settings.llm_provider = "anthropic" if provider == "Anthropic Claude" else "local"
-if settings.llm_provider == "local":
+st.session_state.llm_provider = "anthropic" if provider == "Anthropic Claude" else "local"
+if st.session_state.llm_provider == "local":
     st.sidebar.caption(f"Model: {settings.local_llm_model}")
     st.sidebar.caption(f"URL: {settings.local_llm_base_url}")
 else:
@@ -46,6 +47,11 @@ if "thread_counter" not in st.session_state:
 
 def _run_query(question: str) -> dict:
     """Invoke the LangGraph pipeline and return the full state."""
+    # Apply the per-session provider choice before invoking the pipeline.
+    # This is safe because Streamlit runs each session serially within
+    # a single script execution (no concurrent writes from this session).
+    settings.llm_provider = st.session_state.llm_provider
+
     st.session_state.thread_counter += 1
     thread_id = f"streamlit-{st.session_state.thread_counter}"
     config = {"configurable": {"thread_id": thread_id}}

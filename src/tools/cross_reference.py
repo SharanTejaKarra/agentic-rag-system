@@ -2,40 +2,11 @@
 
 import logging
 
-from src.retrieval.neo4j_client import Neo4jManager
-from src.retrieval.qdrant_client import QdrantManager
 from src.schema.models import Chunk
 from src.utils.references import extract_section_refs, parse_section_ref
 from config.settings import settings
 
-from sentence_transformers import SentenceTransformer
-
 logger = logging.getLogger(__name__)
-
-_encoder: SentenceTransformer | None = None
-_qdrant: QdrantManager | None = None
-_neo4j: Neo4jManager | None = None
-
-
-def _get_encoder() -> SentenceTransformer:
-    global _encoder
-    if _encoder is None:
-        _encoder = SentenceTransformer(settings.embedding_model)
-    return _encoder
-
-
-def _get_qdrant() -> QdrantManager:
-    global _qdrant
-    if _qdrant is None:
-        _qdrant = QdrantManager()
-    return _qdrant
-
-
-def _get_neo4j() -> Neo4jManager:
-    global _neo4j
-    if _neo4j is None:
-        _neo4j = Neo4jManager()
-    return _neo4j
 
 
 def resolve_cross_reference(
@@ -85,9 +56,19 @@ def cross_reference_search(query: str) -> list[Chunk]:
 
 def _resolve_via_graph(section: str, parsed: dict) -> Chunk | None:
     """Look up the referenced section in the knowledge graph."""
-    neo4j = _get_neo4j()
+    try:
+        from src.retrieval.shared import get_neo4j
+        neo4j = get_neo4j()
+    except Exception:
+        logger.exception("Failed to connect to Neo4j for cross-ref resolution")
+        return None
 
-    results = neo4j.find_entity(section, label="Section")
+    try:
+        results = neo4j.find_entity(section, label="Section")
+    except Exception:
+        logger.exception("Graph lookup failed for section '%s'", section)
+        return None
+
     if not results:
         return None
 
@@ -107,18 +88,27 @@ def _resolve_via_vector(
     reference_string: str, section: str, context: str
 ) -> Chunk | None:
     """Fall back to vector search for the reference."""
-    encoder = _get_encoder()
-    qdrant = _get_qdrant()
+    try:
+        from src.retrieval.shared import get_encoder, get_qdrant
+        encoder = get_encoder()
+        qdrant = get_qdrant()
+    except Exception:
+        logger.exception("Failed to connect to Qdrant for cross-ref resolution")
+        return None
 
     search_text = f"{reference_string} {context}".strip()
     query_vector = encoder.encode(search_text).tolist()
 
-    hits = qdrant.search(
-        collection=settings.qdrant_collection_name,
-        query_vector=query_vector,
-        filters={"section_ref": section} if section else None,
-        limit=3,
-    )
+    try:
+        hits = qdrant.search(
+            collection=settings.qdrant_collection_name,
+            query_vector=query_vector,
+            filters={"section_ref": section} if section else None,
+            limit=3,
+        )
+    except Exception:
+        logger.exception("Qdrant search failed for cross-ref '%s'", reference_string)
+        return None
 
     if not hits:
         return None

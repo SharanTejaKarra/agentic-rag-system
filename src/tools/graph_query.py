@@ -2,19 +2,10 @@
 
 import logging
 
-from src.retrieval.neo4j_client import Neo4jManager
 from src.schema.models import Chunk
+from src.utils.references import extract_section_refs
 
 logger = logging.getLogger(__name__)
-
-_neo4j: Neo4jManager | None = None
-
-
-def _get_neo4j() -> Neo4jManager:
-    global _neo4j
-    if _neo4j is None:
-        _neo4j = Neo4jManager()
-    return _neo4j
 
 
 def graph_query(
@@ -24,43 +15,60 @@ def graph_query(
 ) -> list[Chunk]:
     """Query the knowledge graph for an entity and its relationships.
 
-    When called with just a string (e.g. from the graph node), treats it as
-    an entity name and searches with default depth.
+    When called with a full natural-language query (from the graph node),
+    section references are extracted first. If none are found, the raw
+    string is used as the entity name.
 
     Args:
-        entity_name: Name of the entity to look up.
+        entity_name: Entity name or a query string to extract entities from.
         relationship_type: Optional relationship type to filter on.
         depth: How many hops to traverse (default 1).
 
     Returns:
         List of Chunk objects built from matching graph nodes.
     """
-    neo4j = _get_neo4j()
+    try:
+        from src.retrieval.shared import get_neo4j
+        neo4j = get_neo4j()
+    except Exception:
+        logger.exception("Failed to connect to Neo4j")
+        return []
+
+    # Extract section refs if this looks like a full query rather than
+    # a clean entity name (e.g. "How do Section 12 and Section 31 relate?")
+    search_names = extract_section_refs(entity_name)
+    if not search_names:
+        search_names = [entity_name]
+
     chunks: list[Chunk] = []
     seen_ids: set[str] = set()
 
-    # Find the root entity
-    root_results = neo4j.find_entity(entity_name)
-    for record in root_results:
-        node = record.get("n", {})
-        chunk = _node_to_chunk(node)
-        if chunk and chunk.id not in seen_ids:
-            chunks.append(chunk)
-            seen_ids.add(chunk.id)
+    for name in search_names:
+        try:
+            # Find the root entity
+            root_results = neo4j.find_entity(name)
+            for record in root_results:
+                node = record.get("n", {})
+                chunk = _node_to_chunk(node)
+                if chunk and chunk.id not in seen_ids:
+                    chunks.append(chunk)
+                    seen_ids.add(chunk.id)
 
-    # Traverse relationships
-    rel_results = neo4j.find_relationships(
-        entity=entity_name,
-        rel_type=relationship_type,
-        depth=depth,
-    )
-    for record in rel_results:
-        for key in ("n", "m"):
-            node = record.get(key, {})
-            chunk = _node_to_chunk(node)
-            if chunk and chunk.id not in seen_ids:
-                chunks.append(chunk)
-                seen_ids.add(chunk.id)
+            # Traverse relationships
+            rel_results = neo4j.find_relationships(
+                entity=name,
+                rel_type=relationship_type,
+                depth=depth,
+            )
+            for record in rel_results:
+                for key in ("n", "m"):
+                    node = record.get(key, {})
+                    chunk = _node_to_chunk(node)
+                    if chunk and chunk.id not in seen_ids:
+                        chunks.append(chunk)
+                        seen_ids.add(chunk.id)
+        except Exception:
+            logger.exception("Graph query failed for entity '%s'", name)
 
     return chunks
 

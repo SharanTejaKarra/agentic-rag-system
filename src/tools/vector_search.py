@@ -3,30 +3,10 @@
 import logging
 from typing import Any
 
-from sentence_transformers import SentenceTransformer
-
 from config.settings import settings
-from src.retrieval.qdrant_client import QdrantManager
 from src.schema.models import Chunk
 
 logger = logging.getLogger(__name__)
-
-_encoder: SentenceTransformer | None = None
-_qdrant: QdrantManager | None = None
-
-
-def _get_encoder() -> SentenceTransformer:
-    global _encoder
-    if _encoder is None:
-        _encoder = SentenceTransformer(settings.embedding_model)
-    return _encoder
-
-
-def _get_qdrant() -> QdrantManager:
-    global _qdrant
-    if _qdrant is None:
-        _qdrant = QdrantManager()
-    return _qdrant
 
 
 def vector_search(
@@ -41,8 +21,13 @@ def vector_search(
     Returns:
         Scored Chunk objects ordered by relevance.
     """
-    encoder = _get_encoder()
-    qdrant = _get_qdrant()
+    try:
+        from src.retrieval.shared import get_encoder, get_qdrant
+        encoder = get_encoder()
+        qdrant = get_qdrant()
+    except Exception:
+        logger.exception("Failed to connect to Qdrant or load encoder")
+        return []
 
     query_vector = encoder.encode(query).tolist()
 
@@ -59,12 +44,16 @@ def vector_search(
         if not payload_filters:
             payload_filters = None
 
-    hits = qdrant.search(
-        collection=settings.qdrant_collection_name,
-        query_vector=query_vector,
-        filters=payload_filters,
-        limit=settings.retrieval_top_k,
-    )
+    try:
+        hits = qdrant.search(
+            collection=settings.qdrant_collection_name,
+            query_vector=query_vector,
+            filters=payload_filters,
+            limit=settings.retrieval_top_k,
+        )
+    except Exception:
+        logger.exception("Qdrant search failed")
+        return []
 
     chunks = []
     for hit in hits:

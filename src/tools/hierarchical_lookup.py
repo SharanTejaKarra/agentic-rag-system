@@ -2,15 +2,10 @@
 
 import logging
 
-from src.retrieval.neo4j_client import Neo4jManager
 from src.schema.models import Chunk
+from src.utils.references import extract_section_refs
 
 logger = logging.getLogger(__name__)
-
-_neo4j: Neo4jManager | None = None
-
-# The document hierarchy from broadest to narrowest.
-_HIERARCHY_LEVELS = ["Article", "Chapter", "Section", "Subsection"]
 
 # Cypher relationship types for each navigation direction.
 _DIRECTION_MAP = {
@@ -20,39 +15,60 @@ _DIRECTION_MAP = {
 }
 
 
-def _get_neo4j() -> Neo4jManager:
-    global _neo4j
-    if _neo4j is None:
-        _neo4j = Neo4jManager()
-    return _neo4j
-
-
 def hierarchical_lookup(
     target_section: str, direction: str = "children"
 ) -> list[Chunk]:
     """Navigate the document hierarchy from a given section.
 
+    When called with a full query string (from the graph node), section
+    references are extracted first. Falls back to treating the whole
+    string as a section identifier.
+
     Args:
-        target_section: Section identifier (e.g. "4.2", "Article 3").
+        target_section: Section identifier or query to extract refs from.
         direction: One of "parent", "children", or "siblings".
 
     Returns:
         Related Chunk objects from the hierarchy.
     """
-    neo4j = _get_neo4j()
+    try:
+        from src.retrieval.shared import get_neo4j
+        neo4j = get_neo4j()
+    except Exception:
+        logger.exception("Failed to connect to Neo4j")
+        return []
 
-    if direction == "children":
-        return _get_children(neo4j, target_section)
-    elif direction == "parent":
-        return _get_parent(neo4j, target_section)
-    elif direction == "siblings":
-        return _get_siblings(neo4j, target_section)
-    else:
-        logger.warning("Unknown direction '%s', defaulting to children", direction)
-        return _get_children(neo4j, target_section)
+    # Extract section refs if this looks like a full sentence
+    sections = extract_section_refs(target_section)
+    if not sections:
+        sections = [target_section]
+
+    all_chunks: list[Chunk] = []
+    seen_ids: set[str] = set()
+
+    for section in sections:
+        try:
+            if direction == "children":
+                chunks = _get_children(neo4j, section)
+            elif direction == "parent":
+                chunks = _get_parent(neo4j, section)
+            elif direction == "siblings":
+                chunks = _get_siblings(neo4j, section)
+            else:
+                logger.warning("Unknown direction '%s', defaulting to children", direction)
+                chunks = _get_children(neo4j, section)
+
+            for chunk in chunks:
+                if chunk.id not in seen_ids:
+                    all_chunks.append(chunk)
+                    seen_ids.add(chunk.id)
+        except Exception:
+            logger.exception("Hierarchical lookup failed for section '%s'", section)
+
+    return all_chunks
 
 
-def _get_children(neo4j: Neo4jManager, section: str) -> list[Chunk]:
+def _get_children(neo4j, section: str) -> list[Chunk]:
     cypher = (
         "MATCH (parent)-[:HAS_CHILD]->(child) "
         "WHERE parent.name = $section "
@@ -61,7 +77,7 @@ def _get_children(neo4j: Neo4jManager, section: str) -> list[Chunk]:
     return _records_to_chunks(neo4j.query(cypher, {"section": section}), "child")
 
 
-def _get_parent(neo4j: Neo4jManager, section: str) -> list[Chunk]:
+def _get_parent(neo4j, section: str) -> list[Chunk]:
     cypher = (
         "MATCH (parent)-[:HAS_CHILD]->(child) "
         "WHERE child.name = $section "
@@ -70,7 +86,7 @@ def _get_parent(neo4j: Neo4jManager, section: str) -> list[Chunk]:
     return _records_to_chunks(neo4j.query(cypher, {"section": section}), "parent")
 
 
-def _get_siblings(neo4j: Neo4jManager, section: str) -> list[Chunk]:
+def _get_siblings(neo4j, section: str) -> list[Chunk]:
     cypher = (
         "MATCH (parent)-[:HAS_CHILD]->(child) "
         "WHERE child.name = $section "

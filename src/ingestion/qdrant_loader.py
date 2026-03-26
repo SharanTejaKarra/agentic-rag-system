@@ -50,7 +50,7 @@ def load_to_qdrant(
     # Build points
     points: list[PointStruct] = []
     for chunk, embedding in chunk_embeddings:
-        point_id = uuid.uuid5(uuid.NAMESPACE_DNS, chunk.id).hex
+        point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk.id))
         payload = {
             "chunk_id": chunk.id,
             "content": chunk.content,
