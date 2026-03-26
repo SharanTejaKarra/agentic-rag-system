@@ -4,7 +4,8 @@ import json
 import re
 import uuid
 
-from src.schema import Chunk, FactType
+from src.schema.models import Chunk
+from src.schema.enums import FactType
 from src.ingestion.metadata import extract_hierarchy, extract_references
 from src.utils.logging import get_logger
 

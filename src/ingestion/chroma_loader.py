@@ -1,6 +1,6 @@
 """Load chunk embeddings into ChromaDB vector database."""
 
-from src.schema import Chunk
+from src.schema.models import Chunk
 from config.settings import settings
 from src.utils.logging import get_logger
 

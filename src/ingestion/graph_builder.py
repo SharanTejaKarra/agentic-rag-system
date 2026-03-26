@@ -4,7 +4,7 @@ import json
 
 from neo4j import Driver, GraphDatabase
 
-from src.schema import Chunk
+from src.schema.models import Chunk
 from src.llm.client import get_llm_response
 from config.settings import settings
 from src.utils.logging import get_logger

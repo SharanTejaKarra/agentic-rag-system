@@ -6,7 +6,7 @@ All heavy imports are deferred to first use.
 
 import gc
 
-from src.schema import Chunk
+from src.schema.models import Chunk
 from config.settings import settings
 from src.utils.logging import get_logger
 
