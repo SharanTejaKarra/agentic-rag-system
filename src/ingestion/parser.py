@@ -153,35 +153,34 @@ def _parse_pdf_pymupdf(path: Path) -> list[dict]:
 
     results = []
     doc = fitz.open(str(path))
-    total_pages = len(doc)
-    logger.info("Parsing %d pages from %s", total_pages, path.name)
+    try:
+        total_pages = len(doc)
+        logger.info("Parsing %d pages from %s", total_pages, path.name)
 
-    for page_num in range(total_pages):
-        page = doc[page_num]
-        text = page.get_text().strip()
-        if not text:
-            continue
-        results.append({
-            "text": text,
-            "metadata": {
-                "source": path.name,
-                "page": str(page_num + 1),
-                "total_pages": str(total_pages),
-                "file_path": str(path),
-            },
-        })
-        # Log progress every 50 pages
-        if (page_num + 1) % 50 == 0:
-            logger.info("  Parsed %d / %d pages", page_num + 1, total_pages)
-
-    doc.close()
+        for page_num in range(total_pages):
+            page = doc[page_num]
+            text = page.get_text().strip()
+            if not text:
+                continue
+            results.append({
+                "text": text,
+                "metadata": {
+                    "source": path.name,
+                    "page": str(page_num + 1),
+                    "total_pages": str(total_pages),
+                    "file_path": str(path),
+                },
+            })
+            # Log progress every 50 pages
+            if (page_num + 1) % 50 == 0:
+                logger.info("  Parsed %d / %d pages", page_num + 1, total_pages)
+    finally:
+        doc.close()
 
     # If PyMuPDF got nothing, try OCR
     if not results and _HAS_OCR:
         logger.info("PyMuPDF got no text, trying OCR for %s", path.name)
         return _ocr_pdf(path)
-
-    return results
 
     return results
 
