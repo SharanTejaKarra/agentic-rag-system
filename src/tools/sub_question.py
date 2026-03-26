@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 
 import anthropic
 
@@ -9,6 +10,7 @@ from config.settings import settings
 from config.prompts import QUERY_DECOMPOSITION_PROMPT
 from src.schema.enums import RetrievalStrategy
 from src.schema.models import Chunk, SubQuestion
+from src.tools.vector_search import vector_search
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +79,6 @@ def _parse_response(raw_text: str) -> list[SubQuestion]:
         questions = json.loads(raw_text)
     except json.JSONDecodeError:
         # Try to find a JSON array inside markdown fences
-        import re
         match = re.search(r"\[.*\]", raw_text, re.DOTALL)
         if match:
             try:
@@ -114,8 +115,6 @@ def sub_question_search(query: str) -> list[Chunk]:
     Intended for use as a graph-node tool - accepts a single query string
     and returns aggregated Chunk results.
     """
-    from src.tools.vector_search import vector_search
-
     sub_questions = decompose_query(query)
     all_chunks: list[Chunk] = []
     for sq in sub_questions:

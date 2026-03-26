@@ -5,7 +5,7 @@ import logging
 from src.retrieval.neo4j_client import Neo4jManager
 from src.retrieval.qdrant_client import QdrantManager
 from src.schema.models import Chunk
-from src.utils.references import parse_section_ref
+from src.utils.references import extract_section_refs, parse_section_ref
 from config.settings import settings
 
 from sentence_transformers import SentenceTransformer
@@ -69,8 +69,6 @@ def cross_reference_search(query: str) -> list[Chunk]:
     Extracts section references from the query, resolves each one, and
     returns any chunks found. Intended for use as a graph-node tool.
     """
-    from src.utils.references import extract_section_refs
-
     refs = extract_section_refs(query)
     if not refs:
         # No explicit refs found - try treating the whole query as a reference

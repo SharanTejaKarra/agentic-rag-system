@@ -4,6 +4,7 @@ import json
 import time
 
 import anthropic
+import openai
 
 from config.settings import settings
 from src.utils.logging import get_logger
@@ -21,11 +22,10 @@ def _get_anthropic_client() -> anthropic.Anthropic:
     return _anthropic_client
 
 
-def _get_local_client() -> object:
+def _get_local_client() -> openai.OpenAI:
     """Return an OpenAI-compatible client pointed at the local LLM server."""
     global _local_client
     if _local_client is None:
-        import openai
         _local_client = openai.OpenAI(
             base_url=settings.local_llm_base_url,
             api_key="not-needed",

@@ -1,5 +1,7 @@
 """Query expansion and synthetic query generation using Claude."""
 
+import json
+
 from src.llm.client import get_llm_response
 from src.utils.logging import get_logger
 
@@ -20,7 +22,6 @@ def expand_query_synonyms(query: str) -> list[str]:
     raw = get_llm_response(prompt)
 
     # Parse the JSON list from the response
-    import json
     try:
         alternatives = json.loads(raw.strip())
         if isinstance(alternatives, list):
@@ -46,7 +47,6 @@ def generate_synthetic_queries(query: str, n: int = 3) -> list[str]:
     )
     raw = get_llm_response(prompt)
 
-    import json
     try:
         questions = json.loads(raw.strip())
         if isinstance(questions, list):
