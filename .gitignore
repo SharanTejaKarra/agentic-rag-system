@@ -42,5 +42,8 @@ data/
 *.pkl
 *.parquet
 
-# External test projects (not part of this codebase)
+# External test projects and document folders (not part of this codebase)
 alaska-legal/
+Hawaii/
+legal_docs/
+*.pdf
