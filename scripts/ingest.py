@@ -20,13 +20,20 @@ def main() -> None:
         default="legal_docs",
         help="Qdrant collection name (default: legal_docs).",
     )
+    parser.add_argument(
+        "--skip-graph",
+        action="store_true",
+        help="Skip Neo4j graph building (faster, vector search still works).",
+    )
     args = parser.parse_args()
 
     print(f"Starting ingestion from: {args.input_dir}")
     print(f"Target collection: {args.collection}")
+    if args.skip_graph:
+        print("Skipping graph building")
 
     try:
-        stats = run_ingestion(args.input_dir, args.collection)
+        stats = run_ingestion(args.input_dir, args.collection, skip_graph=args.skip_graph)
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)

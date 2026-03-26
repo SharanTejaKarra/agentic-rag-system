@@ -103,29 +103,85 @@ def parse_document(file_path: str) -> list[dict]:
 
 
 def _parse_pdf(path: Path) -> list[dict]:
-    """Parse PDF using LlamaIndex SimpleDirectoryReader, with OCR fallback."""
-    from llama_index.core import SimpleDirectoryReader
+    """Parse PDF page by page to keep memory bounded on large documents.
 
-    reader = SimpleDirectoryReader(input_files=[str(path)])
-    documents = reader.load_data()
+    Falls back to OCR if text extraction returns nothing.
+    """
+    try:
+        import fitz  # PyMuPDF - fast, low memory, page-by-page
+        return _parse_pdf_pymupdf(path)
+    except ImportError:
+        pass
 
-    results = []
-    for i, doc in enumerate(documents):
-        results.append({
-            "text": doc.text,
-            "metadata": {
-                "source": path.name,
-                "page": str(i + 1),
-                "file_path": str(path),
-                **doc.metadata,
-            },
-        })
+    # Fallback to LlamaIndex (loads entire PDF at once, higher memory)
+    try:
+        from llama_index.core import SimpleDirectoryReader
+        reader = SimpleDirectoryReader(input_files=[str(path)])
+        documents = reader.load_data()
 
-    # If text extraction returned nothing useful, try OCR
-    all_text = "".join(r["text"].strip() for r in results)
-    if not all_text and _HAS_OCR:
+        results = []
+        for i, doc in enumerate(documents):
+            text = doc.text.strip()
+            if not text:
+                continue
+            results.append({
+                "text": text,
+                "metadata": {
+                    "source": path.name,
+                    "page": str(i + 1),
+                    "file_path": str(path),
+                },
+            })
+
+        if results:
+            return results
+    except Exception:
+        logger.exception("LlamaIndex PDF parsing failed for %s", path.name)
+
+    # If text extraction returned nothing, try OCR
+    if _HAS_OCR:
         logger.info("PDF text extraction empty, trying OCR for %s", path.name)
         return _ocr_pdf(path)
+
+    logger.warning("No text extracted from %s and OCR not available", path.name)
+    return []
+
+
+def _parse_pdf_pymupdf(path: Path) -> list[dict]:
+    """Parse PDF page by page using PyMuPDF. Much lower memory than LlamaIndex."""
+    import fitz
+
+    results = []
+    doc = fitz.open(str(path))
+    total_pages = len(doc)
+    logger.info("Parsing %d pages from %s", total_pages, path.name)
+
+    for page_num in range(total_pages):
+        page = doc[page_num]
+        text = page.get_text().strip()
+        if not text:
+            continue
+        results.append({
+            "text": text,
+            "metadata": {
+                "source": path.name,
+                "page": str(page_num + 1),
+                "total_pages": str(total_pages),
+                "file_path": str(path),
+            },
+        })
+        # Log progress every 50 pages
+        if (page_num + 1) % 50 == 0:
+            logger.info("  Parsed %d / %d pages", page_num + 1, total_pages)
+
+    doc.close()
+
+    # If PyMuPDF got nothing, try OCR
+    if not results and _HAS_OCR:
+        logger.info("PyMuPDF got no text, trying OCR for %s", path.name)
+        return _ocr_pdf(path)
+
+    return results
 
     return results
 
