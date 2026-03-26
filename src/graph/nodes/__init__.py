@@ -1,3 +1,4 @@
+from src.graph.nodes.evaluate import evaluate_retrieval
 from src.graph.nodes.parse import parse_query
 from src.graph.nodes.plan import plan_retrieval
 from src.graph.nodes.resolve import resolve_cross_references
@@ -6,6 +7,7 @@ from src.graph.nodes.retrieve import execute_retrieval
 from src.graph.nodes.synthesize import synthesize_answer
 
 __all__ = [
+    "evaluate_retrieval",
     "execute_retrieval",
     "format_response",
     "parse_query",

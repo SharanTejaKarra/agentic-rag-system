@@ -1,6 +1,6 @@
 """Tests for conditional edge functions."""
 
-from src.graph.edges import needs_more_retrieval, route_after_retrieval, should_resolve_refs
+from src.graph.edges import has_sections_to_explore, route_after_evaluate, route_after_resolve
 from src.schema.enums import RetrievalStrategy
 from src.schema.models import CrossReference, QueryPlan, RetrievalResult, Chunk
 
@@ -12,51 +12,33 @@ def _make_chunks(n: int) -> list[Chunk]:
     ]
 
 
-class TestShouldResolveRefsTrue:
-    """When pending cross-refs exist and within iteration limit."""
+class TestHasSectionsToExplore:
+    """When there are discovered sections or pending cross-refs."""
 
-    def test_returns_true_with_pending_refs(self):
+    def test_true_with_discovered_sections(self):
         state = {
-            "pending_cross_refs": [
-                CrossReference(
-                    source_section="1.0",
-                    target_section="2.0",
-                    reference_text="See Section 2.0",
-                ),
-            ],
-            "iteration_count": 0,
-            "max_iterations": 3,
-        }
-        assert should_resolve_refs(state) is True
-
-    def test_returns_true_at_iteration_boundary(self):
-        state = {
-            "pending_cross_refs": [
-                CrossReference(
-                    source_section="1.0",
-                    target_section="2.0",
-                    reference_text="See Section 2.0",
-                ),
-            ],
-            "iteration_count": 2,
-            "max_iterations": 3,
-        }
-        assert should_resolve_refs(state) is True
-
-
-class TestShouldResolveRefsFalse:
-    """When no pending cross-refs or iteration limit reached."""
-
-    def test_returns_false_with_no_pending(self):
-        state = {
+            "discovered_sections": ["31.020", "31.060"],
+            "explored_sections": [],
             "pending_cross_refs": [],
             "iteration_count": 0,
             "max_iterations": 3,
         }
-        assert should_resolve_refs(state) is False
+        assert has_sections_to_explore(state) is True
 
-    def test_returns_false_at_max_iterations(self):
+    def test_false_when_all_explored(self):
         state = {
+            "discovered_sections": ["31.020"],
+            "explored_sections": ["31.020"],
+            "pending_cross_refs": [],
+            "iteration_count": 0,
+            "max_iterations": 3,
+        }
+        assert has_sections_to_explore(state) is False
+
+    def test_true_with_pending_crossrefs(self):
+        state = {
+            "discovered_sections": [],
+            "explored_sections": [],
             "pending_cross_refs": [
                 CrossReference(
                     source_section="1.0",
@@ -64,105 +46,69 @@ class TestShouldResolveRefsFalse:
                     reference_text="See Section 2.0",
                 ),
             ],
+            "iteration_count": 0,
+            "max_iterations": 3,
+        }
+        assert has_sections_to_explore(state) is True
+
+    def test_false_at_max_iterations(self):
+        state = {
+            "discovered_sections": ["31.020"],
+            "explored_sections": [],
+            "pending_cross_refs": [],
             "iteration_count": 3,
             "max_iterations": 3,
         }
-        assert should_resolve_refs(state) is False
+        assert has_sections_to_explore(state) is False
 
-    def test_returns_false_with_none_pending(self):
+    def test_false_with_nothing_pending(self):
         state = {
-            "pending_cross_refs": None,
-            "iteration_count": 0,
-            "max_iterations": 3,
-        }
-        assert should_resolve_refs(state) is False
-
-
-class TestRouteAfterRetrieval:
-    """Test all three routing outcomes from route_after_retrieval."""
-
-    def test_routes_to_resolve_when_refs_pending(self):
-        state = {
-            "pending_cross_refs": [
-                CrossReference(
-                    source_section="1.0",
-                    target_section="2.0",
-                    reference_text="See Section 2.0",
-                ),
-            ],
-            "iteration_count": 0,
-            "max_iterations": 3,
-            "retrieved_results": [
-                RetrievalResult(
-                    chunks=_make_chunks(5),
-                    strategy_used=RetrievalStrategy.VECTOR_SEARCH,
-                ),
-            ],
-            "retrieval_plan": QueryPlan(
-                query_type="definitional",
-                primary_strategy=RetrievalStrategy.VECTOR_SEARCH,
-                secondary_strategies=[],
-            ),
-        }
-        assert route_after_retrieval(state) == "resolve"
-
-    def test_routes_to_retrieve_when_sparse_and_untried(self):
-        state = {
+            "discovered_sections": [],
+            "explored_sections": [],
             "pending_cross_refs": [],
             "iteration_count": 0,
             "max_iterations": 3,
-            "retrieved_results": [
-                RetrievalResult(
-                    chunks=_make_chunks(1),
-                    strategy_used=RetrievalStrategy.VECTOR_SEARCH,
-                ),
-            ],
-            "retrieval_plan": QueryPlan(
-                query_type="definitional",
-                primary_strategy=RetrievalStrategy.VECTOR_SEARCH,
-                secondary_strategies=[RetrievalStrategy.GRAPH_QUERY],
-            ),
         }
-        assert route_after_retrieval(state) == "retrieve"
+        assert has_sections_to_explore(state) is False
 
-    def test_routes_to_synthesize_when_enough_chunks(self):
+
+class TestRouteAfterEvaluate:
+    """Routing decisions after the evaluate node."""
+
+    def test_routes_to_resolve_when_sections_discovered(self):
         state = {
+            "discovered_sections": ["31.020"],
+            "explored_sections": [],
             "pending_cross_refs": [],
             "iteration_count": 0,
             "max_iterations": 3,
-            "retrieved_results": [
-                RetrievalResult(
-                    chunks=_make_chunks(5),
-                    strategy_used=RetrievalStrategy.VECTOR_SEARCH,
-                ),
-            ],
-            "retrieval_plan": QueryPlan(
-                query_type="definitional",
-                primary_strategy=RetrievalStrategy.VECTOR_SEARCH,
-                secondary_strategies=[],
-            ),
         }
-        assert route_after_retrieval(state) == "synthesize"
+        assert route_after_evaluate(state) == "resolve"
 
-    def test_routes_to_synthesize_when_sparse_but_all_tried(self):
+    def test_routes_to_synthesize_when_nothing_to_explore(self):
         state = {
+            "discovered_sections": [],
+            "explored_sections": ["31.020"],
             "pending_cross_refs": [],
-            "iteration_count": 0,
+            "iteration_count": 1,
             "max_iterations": 3,
-            "retrieved_results": [
-                RetrievalResult(
-                    chunks=_make_chunks(1),
-                    strategy_used=RetrievalStrategy.VECTOR_SEARCH,
-                ),
-                RetrievalResult(
-                    chunks=_make_chunks(1),
-                    strategy_used=RetrievalStrategy.GRAPH_QUERY,
-                ),
-            ],
-            "retrieval_plan": QueryPlan(
-                query_type="definitional",
-                primary_strategy=RetrievalStrategy.VECTOR_SEARCH,
-                secondary_strategies=[RetrievalStrategy.GRAPH_QUERY],
-            ),
         }
-        assert route_after_retrieval(state) == "synthesize"
+        assert route_after_evaluate(state) == "synthesize"
+
+
+class TestRouteAfterResolve:
+    """Routing decisions after the resolve node."""
+
+    def test_routes_to_evaluate_within_limit(self):
+        state = {
+            "iteration_count": 1,
+            "max_iterations": 3,
+        }
+        assert route_after_resolve(state) == "evaluate"
+
+    def test_routes_to_synthesize_at_max_iterations(self):
+        state = {
+            "iteration_count": 3,
+            "max_iterations": 3,
+        }
+        assert route_after_resolve(state) == "synthesize"

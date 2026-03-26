@@ -1,4 +1,12 @@
-"""Execute retrieval using the planned strategy."""
+"""Execute retrieval and discover sections for further exploration.
+
+After running each tool, this node scans the returned chunks for section
+references. Those sections go into discovered_sections so the resolve
+node (or the evaluate node) can decide to explore them via graph/hierarchy.
+
+This is the key to making the system agentic: vector search finds text,
+text mentions sections, sections get explored via the knowledge graph.
+"""
 
 from __future__ import annotations
 
@@ -11,8 +19,11 @@ from src.tools.hierarchical_lookup import hierarchical_lookup
 from src.tools.propositional_search import propositional_search
 from src.tools.sub_question import sub_question_search
 from src.tools.vector_search import vector_search
+from src.utils.logging import get_logger
+from src.utils.references import extract_section_refs
 
-# Minimum chunk count before we try secondary strategies
+logger = get_logger(__name__)
+
 _SPARSE_THRESHOLD = 3
 
 _TOOL_MAP = {
@@ -26,15 +37,11 @@ _TOOL_MAP = {
 
 
 def execute_retrieval(state: AgentState) -> dict:
-    """Run the primary retrieval strategy; fall back to secondaries if sparse.
-
-    Tracks which strategies have already been executed (across loop
-    iterations) so we never run the same strategy twice.
-    """
+    """Run planned retrieval strategies and discover sections in the results."""
     plan = state["retrieval_plan"]
     query = state["original_query"]
 
-    # Figure out which strategies have already been run in prior iterations
+    # Track what has already been run across iterations
     already_used: set[RetrievalStrategy] = set()
     for prev_result in (state.get("retrieved_results") or []):
         already_used.add(prev_result.strategy_used)
@@ -58,7 +65,7 @@ def execute_retrieval(state: AgentState) -> dict:
             total_chunks += len(primary_result)
             already_used.add(plan.primary_strategy)
 
-    # If total results are still sparse, try secondary strategies
+    # If results are sparse, try secondary strategies
     if total_chunks < _SPARSE_THRESHOLD:
         for strategy in plan.secondary_strategies:
             if strategy in already_used:
@@ -76,4 +83,30 @@ def execute_retrieval(state: AgentState) -> dict:
             total_chunks += len(secondary_result)
             already_used.add(strategy)
 
-    return {"retrieved_results": results}
+    # Scan all new chunks for section references we haven't explored yet
+    already_explored = set(state.get("explored_sections") or [])
+    newly_discovered: set[str] = set()
+
+    for result in results:
+        for chunk in result.chunks:
+            refs = extract_section_refs(chunk.content)
+            for ref in refs:
+                if ref not in already_explored:
+                    newly_discovered.add(ref)
+
+    # Also pick up sections from the query itself (if user mentioned them)
+    query_refs = extract_section_refs(query)
+    for ref in query_refs:
+        if ref not in already_explored:
+            newly_discovered.add(ref)
+
+    logger.info(
+        "Retrieval: %d new chunks, %d sections discovered",
+        sum(len(r.chunks) for r in results),
+        len(newly_discovered),
+    )
+
+    return {
+        "retrieved_results": results,
+        "discovered_sections": list(newly_discovered),
+    }

@@ -1,39 +1,61 @@
-"""Conditional edge functions for the LangGraph agent."""
+"""Conditional edge functions for the LangGraph agent.
+
+The routing logic is what makes this system agentic. After each step,
+the system decides whether to explore discovered sections, try more
+retrieval strategies, or proceed to synthesis.
+
+The flow:
+  retrieve -> evaluate -> [resolve | synthesize]
+  resolve  -> evaluate -> [resolve | synthesize]
+
+The evaluate node sets discovered_sections and pending_cross_refs.
+The edge functions read those to decide what happens next.
+"""
 
 from __future__ import annotations
 
 from src.schema.state import AgentState
 
 
-def should_resolve_refs(state: AgentState) -> bool:
-    """True if there are pending unresolved cross-references within iteration limit."""
+def has_sections_to_explore(state: AgentState) -> bool:
+    """True if there are discovered sections or pending cross-refs to resolve."""
+    discovered = state.get("discovered_sections") or []
     pending = state.get("pending_cross_refs") or []
+    explored = set(state.get("explored_sections") or [])
+
+    # Filter discovered to only those not yet explored
+    unexplored = [s for s in discovered if s not in explored]
+
+    # Check iteration limit
     iteration = state.get("iteration_count") or 0
     max_iter = state.get("max_iterations") or 3
-    return len(pending) > 0 and iteration < max_iter
-
-
-def needs_more_retrieval(state: AgentState) -> bool:
-    """True if retrieved results are sparse and secondary strategies remain untried."""
-    results = state.get("retrieved_results") or []
-    plan = state.get("retrieval_plan")
-    if not plan:
+    if iteration >= max_iter:
         return False
 
-    total_chunks = sum(len(r.chunks) for r in results)
-    strategies_used = {r.strategy_used for r in results}
-    untried = [s for s in plan.secondary_strategies if s not in strategies_used]
-
-    return total_chunks < 3 and len(untried) > 0
+    return len(unexplored) > 0 or len(pending) > 0
 
 
-def route_after_retrieval(state: AgentState) -> str:
-    """Decide the next step after retrieval or resolution.
+def route_after_evaluate(state: AgentState) -> str:
+    """Decide the next step after the evaluate node.
 
-    Returns one of: "resolve", "synthesize", "retrieve".
+    Returns "resolve" if there are sections to explore, "synthesize" otherwise.
     """
-    if should_resolve_refs(state):
+    if has_sections_to_explore(state):
         return "resolve"
-    if needs_more_retrieval(state):
-        return "retrieve"
     return "synthesize"
+
+
+def route_after_resolve(state: AgentState) -> str:
+    """Decide the next step after the resolve node.
+
+    Returns "evaluate" to let the LLM decide if we need more, or
+    "synthesize" if we have hit iteration limits.
+    """
+    iteration = state.get("iteration_count") or 0
+    max_iter = state.get("max_iterations") or 3
+
+    if iteration >= max_iter:
+        return "synthesize"
+
+    # Go back to evaluate so the LLM can decide if enough context exists
+    return "evaluate"

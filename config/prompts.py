@@ -38,8 +38,76 @@ You have retrieved the following context chunks to answer a user's question. \
 Synthesize them into a single coherent answer. Cite each chunk by its source \
 identifier in square brackets (e.g., [DOC-123, Section 4.2]).
 
+If a chunk references other sections that might add useful context, mention that \
+in your answer so the reader knows where to look for more detail.
+
+If the retrieved context is insufficient to fully answer the question, be honest \
+about what is missing and what parts you can answer.
+
 Question: {question}
 
 Retrieved context:
 {context}
+"""
+
+PLANNING_PROMPT = """\
+You are a retrieval planner for a legal document RAG system. Given a user's \
+question and its classification, decide which retrieval tools to use and in \
+what order.
+
+Available tools:
+- vector_search: Semantic similarity search. Good for finding relevant text \
+  when you don't know exactly where it is. Use this first for general questions.
+- graph_query: Traverses the knowledge graph (entities, relationships). Good \
+  for finding how concepts relate to each other, what penalties apply to what, etc.
+- hierarchical_lookup: Navigates the document hierarchy (article > chapter > \
+  section > subsection). Good for finding surrounding context for a known section.
+- propositional_search: Searches by fact type (rule, exception, penalty, \
+  condition, definition). Good for compliance questions.
+- cross_reference: Resolves specific section references like "31.020(a)(1)".
+- sub_question: Breaks complex queries into sub-questions and searches each.
+
+Important rules:
+- For general questions where the user does not mention a specific section \
+  number, ALWAYS start with vector_search. The vector search will discover \
+  relevant sections, which can then be explored with graph and hierarchy tools.
+- Only use graph_query or hierarchical_lookup as a PRIMARY tool when the user \
+  explicitly mentions section numbers or asks about relationships between \
+  specific known entities.
+- For complex multi-part questions, consider sub_question.
+- You can plan multiple tools in sequence. The system will run them in order.
+
+User question: {query}
+Query type: {query_type}
+
+Return JSON with:
+- "primary_strategy": the first tool to use (one of: vector_search, graph_query, \
+  hierarchical_lookup, propositional_search, cross_reference, sub_question)
+- "secondary_strategies": list of additional tools to try if the primary \
+  returns sparse results
+- "reasoning": one sentence explaining your choice
+"""
+
+EVALUATE_PROMPT = """\
+You are evaluating whether enough context has been retrieved to answer a \
+user's question about legal/regulatory documents.
+
+User question: {query}
+
+Retrieved context so far:
+{context}
+
+Sections discovered but not yet explored via knowledge graph: {undiscovered}
+
+Answer these questions:
+1. Do I have enough information to write a good answer to the user's question?
+2. Are there sections mentioned in the retrieved text that I should explore \
+   further to give a complete answer?
+3. Would exploring the discovered sections likely add important context \
+   (e.g., penalties, exceptions, definitions, related procedures)?
+
+Return JSON with:
+- "sufficient": true if we have enough to answer, false if we need more
+- "reasoning": one sentence explaining why
+- "explore_sections": list of section identifiers worth exploring (can be empty)
 """

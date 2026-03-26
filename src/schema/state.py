@@ -18,6 +18,10 @@ class AgentState(TypedDict, total=False):
     retrieved_results: Annotated[list[RetrievalResult], add]
     pending_cross_refs: list[CrossReference]
     resolved_cross_refs: Annotated[list[CrossReference], add]
+    # Sections discovered during retrieval that need graph/hierarchy exploration
+    discovered_sections: list[str]
+    # Sections already explored so we don't repeat work
+    explored_sections: Annotated[list[str], add]
     synthesis: str
     citations: list[Citation]
     confidence: Confidence | None

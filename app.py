@@ -257,6 +257,13 @@ elif page == "Debug":
                     else:
                         st.markdown(f"- (pending) {xref.get('source_section', '')} -> {xref.get('target_section', '')}")
 
+        # Explored sections (agentic discovery)
+        explored = result.get("explored_sections", [])
+        if explored:
+            with st.expander(f"Sections Explored via Graph ({len(explored)})"):
+                for sec in explored:
+                    st.markdown(f"- {sec}")
+
         # Confidence and iteration info
         with st.expander("Reasoning Summary"):
             confidence = result.get("confidence")

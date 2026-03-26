@@ -88,6 +88,8 @@ def sample_state(sample_chunks: list[Chunk]) -> AgentState:
         ],
         "pending_cross_refs": [],
         "resolved_cross_refs": [],
+        "discovered_sections": [],
+        "explored_sections": [],
         "synthesis": "",
         "citations": [],
         "confidence": None,
