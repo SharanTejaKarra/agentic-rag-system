@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from src.ingestion.parser import parse_document
+from src.ingestion.parser import parse_document, ALL_SUPPORTED_EXTENSIONS
 from src.ingestion.chunker import hierarchical_chunk
 from src.ingestion.embedder import embed_chunks
 from src.ingestion.qdrant_loader import load_to_qdrant
@@ -29,7 +29,7 @@ def run_ingestion(
 
     # Step 1: Parse all documents
     all_docs: list[dict] = []
-    supported = {".pdf", ".html", ".htm", ".txt", ".text", ".md"}
+    supported = ALL_SUPPORTED_EXTENSIONS
     files = [f for f in input_path.iterdir() if f.is_file() and f.suffix.lower() in supported]
 
     logger.info("Found %d files to ingest", len(files))

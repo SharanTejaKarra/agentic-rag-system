@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     app_port: int = 8000
     debug: bool = False
 
+    # OCR (optional, for scanned PDFs)
+    tesseract_cmd: str = ""
+
     # Logging
     log_level: str = "INFO"
 
