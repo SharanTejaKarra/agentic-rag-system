@@ -24,9 +24,10 @@ agentic-rag-system/
 │   │   ├── nodes/
 │   │   │   ├── __init__.py
 │   │   │   ├── parse.py     - Classifies query type and extracts key entities
-│   │   │   ├── plan.py      - Selects retrieval strategy based on query type
+│   │   │   ├── plan.py      - LLM-based retrieval planning with fallback table
 │   │   │   ├── retrieve.py  - Executes the chosen retrieval tools
-│   │   │   ├── resolve.py   - Follows and resolves cross-references
+│   │   │   ├── evaluate.py  - Decides if enough context or more exploration needed
+│   │   │   ├── resolve.py   - Explores discovered sections and resolves cross-refs
 │   │   │   ├── synthesize.py - Combines retrieved chunks into a draft answer
 │   │   │   └── respond.py   - Formats final answer with citations
 │   │   └── edges.py         - Conditional routing logic between nodes
@@ -95,9 +96,11 @@ agentic-rag-system/
 
 2. **Query processing**: User query enters the LangGraph state machine:
    - `parse` - classify query type, extract entities
-   - `plan` - pick retrieval strategy
-   - `retrieve` - call the appropriate tools (vector search, graph query, etc.)
-   - `resolve` - follow any cross-references found in results
+   - `plan` - LLM picks retrieval tools (falls back to a static table on failure)
+   - `retrieve` - call the chosen tools (vector search, graph query, etc.)
+   - `evaluate` - LLM decides if enough context exists or if more sections need exploring
+   - `resolve` - explores discovered sections via graph/hierarchy, resolves cross-refs
+   - The evaluate/resolve loop repeats until the LLM is satisfied or max iterations hit
    - `synthesize` - combine chunks into a draft answer
    - `respond` - format with citations and return
 

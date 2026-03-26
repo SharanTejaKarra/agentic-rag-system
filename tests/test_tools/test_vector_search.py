@@ -31,8 +31,8 @@ class TestVectorSearchReturnsChunks:
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.tools.vector_search._get_qdrant", return_value=mock_qdrant), \
-             patch("src.tools.vector_search._get_encoder", return_value=mock_encoder):
+        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+             patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
             result = vector_search("What is a beneficiary?")
@@ -49,8 +49,8 @@ class TestVectorSearchReturnsChunks:
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.tools.vector_search._get_qdrant", return_value=mock_qdrant), \
-             patch("src.tools.vector_search._get_encoder", return_value=mock_encoder):
+        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+             patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
             result = vector_search("test query")
@@ -72,8 +72,8 @@ class TestVectorSearchWithFilters:
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.tools.vector_search._get_qdrant", return_value=mock_qdrant), \
-             patch("src.tools.vector_search._get_encoder", return_value=mock_encoder):
+        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+             patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
             vector_search("test", filters={"section": "4.2"})
@@ -88,8 +88,8 @@ class TestVectorSearchWithFilters:
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.tools.vector_search._get_qdrant", return_value=mock_qdrant), \
-             patch("src.tools.vector_search._get_encoder", return_value=mock_encoder):
+        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+             patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
             vector_search("test", filters={"entity_type": "person"})
@@ -108,8 +108,8 @@ class TestVectorSearchEmptyResults:
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.tools.vector_search._get_qdrant", return_value=mock_qdrant), \
-             patch("src.tools.vector_search._get_encoder", return_value=mock_encoder):
+        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+             patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
             result = vector_search("nonexistent concept")
@@ -123,8 +123,8 @@ class TestVectorSearchEmptyResults:
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.tools.vector_search._get_qdrant", return_value=mock_qdrant), \
-             patch("src.tools.vector_search._get_encoder", return_value=mock_encoder):
+        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+             patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
             vector_search("test", filters={})

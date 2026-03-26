@@ -72,13 +72,21 @@ class TestParseQueryClassification:
 
 
 class TestPlanRetrievalStrategy:
-    """Verify plan node selects correct strategies per query type."""
+    """Verify plan node selects correct strategies via fallback table.
 
-    def test_plan_definitional(self):
+    plan_retrieval now calls get_llm_response. We mock it to raise so the
+    fallback table is exercised, which is the code path these tests cover.
+    """
+
+    def _plan_with_fallback(self, state):
         from src.graph.nodes.plan import plan_retrieval
 
-        state = {"query_type": QueryType.DEFINITIONAL}
-        result = plan_retrieval(state)
+        with patch("src.graph.nodes.plan.get_llm_response", side_effect=RuntimeError("mock")):
+            return plan_retrieval(state)
+
+    def test_plan_definitional(self):
+        state = {"query_type": QueryType.DEFINITIONAL, "original_query": "What is X?"}
+        result = self._plan_with_fallback(state)
 
         plan = result["retrieval_plan"]
         assert plan.primary_strategy == RetrievalStrategy.VECTOR_SEARCH
@@ -86,53 +94,61 @@ class TestPlanRetrievalStrategy:
         assert RetrievalStrategy.HIERARCHICAL in plan.secondary_strategies
 
     def test_plan_procedural(self):
-        from src.graph.nodes.plan import plan_retrieval
-
-        state = {"query_type": QueryType.PROCEDURAL}
-        result = plan_retrieval(state)
+        state = {"query_type": QueryType.PROCEDURAL, "original_query": "How do I do X?"}
+        result = self._plan_with_fallback(state)
 
         plan = result["retrieval_plan"]
         assert plan.primary_strategy == RetrievalStrategy.VECTOR_SEARCH
         assert RetrievalStrategy.GRAPH_QUERY in plan.secondary_strategies
 
     def test_plan_structural(self):
-        from src.graph.nodes.plan import plan_retrieval
-
-        state = {"query_type": QueryType.STRUCTURAL}
-        result = plan_retrieval(state)
+        state = {"query_type": QueryType.STRUCTURAL, "original_query": "How do A and B relate?"}
+        result = self._plan_with_fallback(state)
 
         plan = result["retrieval_plan"]
-        assert plan.primary_strategy == RetrievalStrategy.GRAPH_QUERY
-        assert RetrievalStrategy.VECTOR_SEARCH in plan.secondary_strategies
-
-    def test_plan_compliance(self):
-        from src.graph.nodes.plan import plan_retrieval
-
-        state = {"query_type": QueryType.COMPLIANCE}
-        result = plan_retrieval(state)
-
-        plan = result["retrieval_plan"]
-        assert plan.primary_strategy == RetrievalStrategy.PROPOSITIONAL
+        assert plan.primary_strategy == RetrievalStrategy.VECTOR_SEARCH
+        # vector_search is always included as a safety net
         assert RetrievalStrategy.GRAPH_QUERY in plan.secondary_strategies
 
-    def test_plan_temporal(self):
-        from src.graph.nodes.plan import plan_retrieval
+    def test_plan_compliance(self):
+        state = {"query_type": QueryType.COMPLIANCE, "original_query": "Am I violating X?"}
+        result = self._plan_with_fallback(state)
 
-        state = {"query_type": QueryType.TEMPORAL}
-        result = plan_retrieval(state)
+        plan = result["retrieval_plan"]
+        assert plan.primary_strategy == RetrievalStrategy.VECTOR_SEARCH
+        assert RetrievalStrategy.PROPOSITIONAL in plan.secondary_strategies
+
+    def test_plan_temporal(self):
+        state = {"query_type": QueryType.TEMPORAL, "original_query": "When does X happen?"}
+        result = self._plan_with_fallback(state)
 
         plan = result["retrieval_plan"]
         assert plan.primary_strategy == RetrievalStrategy.VECTOR_SEARCH
         assert RetrievalStrategy.HIERARCHICAL in plan.secondary_strategies
 
     def test_plan_defaults_to_definitional(self):
-        from src.graph.nodes.plan import plan_retrieval
-
-        state = {"query_type": None}
-        result = plan_retrieval(state)
+        state = {"query_type": None, "original_query": "Something"}
+        result = self._plan_with_fallback(state)
 
         plan = result["retrieval_plan"]
         assert plan.primary_strategy == RetrievalStrategy.VECTOR_SEARCH
+
+    def test_plan_uses_llm_when_available(self):
+        """When LLM responds with valid JSON, use its choices."""
+        from src.graph.nodes.plan import plan_retrieval
+
+        llm_response = (
+            '{"primary_strategy": "graph_query", '
+            '"secondary_strategies": ["vector_search"], '
+            '"reasoning": "test"}'
+        )
+        state = {"query_type": QueryType.STRUCTURAL, "original_query": "How do A and B relate?"}
+        with patch("src.graph.nodes.plan.get_llm_response", return_value=llm_response):
+            result = plan_retrieval(state)
+
+        plan = result["retrieval_plan"]
+        assert plan.primary_strategy == RetrievalStrategy.GRAPH_QUERY
+        assert RetrievalStrategy.VECTOR_SEARCH in plan.secondary_strategies
 
 
 class TestRetrieveCallsCorrectTool:
@@ -217,10 +233,17 @@ class TestRetrieveCallsCorrectTool:
 class TestResolveDetectsCrossRefs:
     """Verify resolve node finds section references in chunks."""
 
+    def _patch_resolve_tools(self):
+        """Patch all external tool calls in resolve.py."""
+        return [
+            patch("src.graph.nodes.resolve.cross_reference_search", return_value=[]),
+            patch("src.graph.nodes.resolve.graph_query", return_value=[]),
+            patch("src.graph.nodes.resolve.hierarchical_lookup", return_value=[]),
+        ]
+
     def test_detects_pending_refs(self, sample_chunks):
         from src.graph.nodes.resolve import resolve_cross_references
 
-        # chunk_002 references Section 31.020(a)(1)
         state = {
             "retrieved_results": [
                 RetrievalResult(
@@ -240,10 +263,9 @@ class TestResolveDetectsCrossRefs:
             "max_iterations": 3,
         }
 
-        with patch(
-            "src.graph.nodes.resolve.cross_reference_search",
-            return_value=[sample_chunks[0]],
-        ):
+        with patch("src.graph.nodes.resolve.cross_reference_search", return_value=[sample_chunks[0]]), \
+             patch("src.graph.nodes.resolve.graph_query", return_value=[]), \
+             patch("src.graph.nodes.resolve.hierarchical_lookup", return_value=[]):
             result = resolve_cross_references(state)
 
             assert len(result["resolved_cross_refs"]) == 1
@@ -254,13 +276,150 @@ class TestResolveDetectsCrossRefs:
 
         sample_state["iteration_count"] = 1
 
-        with patch(
-            "src.graph.nodes.resolve.cross_reference_search",
-            return_value=[],
-        ):
+        patches = self._patch_resolve_tools()
+        for p in patches:
+            p.start()
+        try:
             result = resolve_cross_references(sample_state)
-
             assert result["iteration_count"] == 2
+        finally:
+            for p in patches:
+                p.stop()
+
+    def test_explores_discovered_sections(self, sample_chunks):
+        """When discovered_sections has entries, resolve calls graph and hierarchy tools."""
+        from src.graph.nodes.resolve import resolve_cross_references
+
+        state = {
+            "discovered_sections": ["Section 31.020"],
+            "explored_sections": [],
+            "pending_cross_refs": [],
+            "resolved_cross_refs": [],
+            "retrieved_results": [],
+            "iteration_count": 0,
+            "max_iterations": 3,
+        }
+
+        with patch("src.graph.nodes.resolve.cross_reference_search", return_value=[]), \
+             patch("src.graph.nodes.resolve.graph_query", return_value=sample_chunks[:1]) as mock_gq, \
+             patch("src.graph.nodes.resolve.hierarchical_lookup", return_value=[]):
+            result = resolve_cross_references(state)
+
+            mock_gq.assert_called_once_with("Section 31.020")
+            assert "Section 31.020" in result["explored_sections"]
+
+    def test_skips_already_explored_sections(self, sample_chunks):
+        """Sections in explored_sections are not queried again."""
+        from src.graph.nodes.resolve import resolve_cross_references
+
+        state = {
+            "discovered_sections": ["Section 31.020"],
+            "explored_sections": ["Section 31.020"],
+            "pending_cross_refs": [],
+            "resolved_cross_refs": [],
+            "retrieved_results": [],
+            "iteration_count": 0,
+            "max_iterations": 3,
+        }
+
+        with patch("src.graph.nodes.resolve.cross_reference_search", return_value=[]), \
+             patch("src.graph.nodes.resolve.graph_query", return_value=[]) as mock_gq, \
+             patch("src.graph.nodes.resolve.hierarchical_lookup", return_value=[]):
+            result = resolve_cross_references(state)
+
+            mock_gq.assert_not_called()
+
+
+class TestEvaluateRetrieval:
+    """Verify the evaluate node decides when to synthesize vs explore more."""
+
+    def test_proceeds_to_synthesis_at_max_iterations(self):
+        from src.graph.nodes.evaluate import evaluate_retrieval
+
+        state = {
+            "original_query": "What is X?",
+            "iteration_count": 3,
+            "max_iterations": 3,
+            "retrieved_results": [],
+        }
+        result = evaluate_retrieval(state)
+
+        # At max iterations, should clear sections and go to synthesis
+        assert result["discovered_sections"] == []
+
+    def test_skips_eval_when_no_chunks(self):
+        from src.graph.nodes.evaluate import evaluate_retrieval
+
+        state = {
+            "original_query": "What is X?",
+            "iteration_count": 0,
+            "max_iterations": 3,
+            "retrieved_results": [],
+        }
+        result = evaluate_retrieval(state)
+
+        assert result["discovered_sections"] == []
+
+    def test_proceeds_when_enough_chunks_and_no_undiscovered(self, sample_state):
+        from src.graph.nodes.evaluate import evaluate_retrieval
+
+        # sample_state has 3 chunks and no discovered_sections
+        result = evaluate_retrieval(sample_state)
+
+        assert result["discovered_sections"] == []
+
+    def test_asks_llm_when_undiscovered_sections_exist(self, sample_state):
+        from src.graph.nodes.evaluate import evaluate_retrieval
+
+        sample_state["discovered_sections"] = ["Section 45.200"]
+        sample_state["explored_sections"] = []
+
+        llm_response = (
+            '{"sufficient": false, '
+            '"explore_sections": ["Section 45.200"], '
+            '"reasoning": "need penalty details"}'
+        )
+        with patch("src.graph.nodes.evaluate.get_llm_response", return_value=llm_response):
+            result = evaluate_retrieval(sample_state)
+
+        assert "Section 45.200" in result["discovered_sections"]
+
+    def test_falls_back_to_heuristic_when_llm_fails(self, sample_state):
+        from src.graph.nodes.evaluate import evaluate_retrieval
+
+        sample_state["discovered_sections"] = ["Section 45.200"]
+        sample_state["explored_sections"] = []
+        # Reduce chunks so we don't hit the quick path
+        sample_state["retrieved_results"] = [
+            RetrievalResult(
+                chunks=sample_state["retrieved_results"][0].chunks[:2],
+                strategy_used=RetrievalStrategy.VECTOR_SEARCH,
+            ),
+        ]
+
+        with patch("src.graph.nodes.evaluate.get_llm_response", side_effect=RuntimeError("mock")):
+            result = evaluate_retrieval(sample_state)
+
+        # Heuristic fallback: should suggest exploring undiscovered sections
+        assert "Section 45.200" in result["discovered_sections"]
+
+    def test_sufficient_llm_response_clears_sections(self, sample_state):
+        from src.graph.nodes.evaluate import evaluate_retrieval
+
+        sample_state["discovered_sections"] = ["Section 45.200"]
+        sample_state["explored_sections"] = []
+        sample_state["retrieved_results"] = [
+            RetrievalResult(
+                chunks=sample_state["retrieved_results"][0].chunks[:2],
+                strategy_used=RetrievalStrategy.VECTOR_SEARCH,
+            ),
+        ]
+
+        llm_response = '{"sufficient": true, "explore_sections": [], "reasoning": "enough context"}'
+        with patch("src.graph.nodes.evaluate.get_llm_response", return_value=llm_response):
+            result = evaluate_retrieval(sample_state)
+
+        assert result["discovered_sections"] == []
 
 
 class TestSynthesizeSetsConfidence:

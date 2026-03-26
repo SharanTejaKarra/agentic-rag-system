@@ -1,5 +1,7 @@
 """Chunking strategies: hierarchical (rule-based) and propositional (LLM-based)."""
 
+import json
+import re
 import uuid
 
 from src.schema import Chunk, FactType
@@ -76,7 +78,6 @@ def propositional_chunk(documents: list[dict]) -> list[Chunk]:
             )
 
             try:
-                import json
                 raw = get_llm_response(prompt)
                 # Try to extract JSON from the response
                 raw = raw.strip()
@@ -112,8 +113,6 @@ def propositional_chunk(documents: list[dict]) -> list[Chunk]:
 
 def _split_by_sections(text: str) -> list[tuple[str, str]]:
     """Split text by section headers. Returns (text, section_ref) pairs."""
-    import re
-
     pattern = re.compile(r"(?m)^(?:SECTION|Section|ARTICLE|Article|CHAPTER|Chapter)\s+(\S+)")
     matches = list(pattern.finditer(text))
 
