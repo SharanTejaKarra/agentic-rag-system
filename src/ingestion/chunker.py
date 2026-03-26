@@ -6,7 +6,6 @@ import uuid
 
 from src.schema import Chunk, FactType
 from src.ingestion.metadata import extract_hierarchy, extract_references
-from src.llm.client import get_llm_response
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -66,6 +65,8 @@ def propositional_chunk(documents: list[dict]) -> list[Chunk]:
 
         # Process in windows to stay within context limits
         windows = _split_by_size(text, 2000, 100)
+
+        from src.llm.client import get_llm_response
 
         for window in windows:
             prompt = (

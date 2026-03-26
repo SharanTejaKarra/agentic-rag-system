@@ -18,7 +18,7 @@ def main() -> None:
     parser.add_argument(
         "--collection",
         default="legal_docs",
-        help="Qdrant collection name (default: legal_docs).",
+        help="ChromaDB collection name (default: legal_docs).",
     )
     parser.add_argument(
         "--skip-graph",
@@ -45,7 +45,7 @@ def main() -> None:
     print(f"  Files found:       {stats['files_found']}")
     print(f"  Documents parsed:  {stats['documents_parsed']}")
     print(f"  Chunks created:    {stats['chunks']}")
-    print(f"  Loaded to Qdrant:  {stats['loaded']}")
+    print(f"  Loaded to ChromaDB: {stats['loaded']}")
     print(f"  Graph stats:       {stats['graph']}")
 
 

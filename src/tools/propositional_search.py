@@ -47,11 +47,11 @@ def propositional_search(
         subject = fact_type_or_query
 
     try:
-        from src.retrieval.shared import get_encoder, get_qdrant
+        from src.retrieval.shared import get_encoder, get_chroma
         encoder = get_encoder()
-        qdrant = get_qdrant()
+        chroma = get_chroma()
     except Exception:
-        logger.exception("Failed to connect to Qdrant or load encoder")
+        logger.exception("Failed to connect to ChromaDB or load encoder")
         return []
 
     query_vector = encoder.encode(f"{fact_type}: {subject}").tolist()
@@ -64,14 +64,14 @@ def propositional_search(
             payload_filters["date"] = filters["date_range"]
 
     try:
-        hits = qdrant.search(
-            collection=settings.qdrant_collection_name,
+        hits = chroma.search(
+            collection=settings.chroma_collection_name,
             query_vector=query_vector,
             filters=payload_filters,
             limit=settings.retrieval_top_k,
         )
     except Exception:
-        logger.exception("Qdrant search failed for propositional query")
+        logger.exception("ChromaDB search failed for propositional query")
         return []
 
     chunks = []

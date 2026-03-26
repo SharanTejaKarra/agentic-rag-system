@@ -22,11 +22,11 @@ def vector_search(
         Scored Chunk objects ordered by relevance.
     """
     try:
-        from src.retrieval.shared import get_encoder, get_qdrant
+        from src.retrieval.shared import get_encoder, get_chroma
         encoder = get_encoder()
-        qdrant = get_qdrant()
+        chroma = get_chroma()
     except Exception:
-        logger.exception("Failed to connect to Qdrant or load encoder")
+        logger.exception("Failed to connect to ChromaDB or load encoder")
         return []
 
     query_vector = encoder.encode(query).tolist()
@@ -45,14 +45,14 @@ def vector_search(
             payload_filters = None
 
     try:
-        hits = qdrant.search(
-            collection=settings.qdrant_collection_name,
+        hits = chroma.search(
+            collection=settings.chroma_collection_name,
             query_vector=query_vector,
             filters=payload_filters,
             limit=settings.retrieval_top_k,
         )
     except Exception:
-        logger.exception("Qdrant search failed")
+        logger.exception("ChromaDB search failed")
         return []
 
     chunks = []

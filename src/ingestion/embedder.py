@@ -1,6 +1,7 @@
 """Embedding generation using LlamaIndex HuggingFaceEmbedding.
 
 Processes chunks in small batches to avoid OOM on large documents.
+All heavy imports are deferred to first use.
 """
 
 import gc

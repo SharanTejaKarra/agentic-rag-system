@@ -3,7 +3,8 @@
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
-import qdrant_client
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
 from neo4j import GraphDatabase
 from pydantic import BaseModel
@@ -46,7 +47,7 @@ class IngestResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
-    qdrant: str
+    chroma: str
     neo4j: str
 
 
@@ -109,21 +110,16 @@ async def ingest_endpoint(req: IngestRequest):
 
 @app.get("/health", response_model=HealthResponse)
 async def health_endpoint():
-    """Check connectivity to Qdrant and Neo4j."""
-    qdrant_status = "unknown"
+    """Check ChromaDB persist directory and Neo4j connectivity."""
+    chroma_status = "unknown"
     neo4j_status = "unknown"
 
-    # Check Qdrant
-    try:
-        qclient = qdrant_client.QdrantClient(
-            url=settings.qdrant_url,
-            api_key=settings.qdrant_api_key or None,
-            timeout=5,
-        )
-        qclient.get_collections()
-        qdrant_status = "ok"
-    except Exception as exc:
-        qdrant_status = f"error: {exc}"
+    # Check ChromaDB
+    chroma_path = Path(settings.chroma_persist_dir)
+    if chroma_path.exists():
+        chroma_status = "ok"
+    else:
+        chroma_status = f"error: persist dir not found ({settings.chroma_persist_dir})"
 
     # Check Neo4j
     try:
@@ -137,5 +133,5 @@ async def health_endpoint():
     except Exception as exc:
         neo4j_status = f"error: {exc}"
 
-    overall = "healthy" if qdrant_status == "ok" and neo4j_status == "ok" else "degraded"
-    return HealthResponse(status=overall, qdrant=qdrant_status, neo4j=neo4j_status)
+    overall = "healthy" if chroma_status == "ok" and neo4j_status == "ok" else "degraded"
+    return HealthResponse(status=overall, chroma=chroma_status, neo4j=neo4j_status)

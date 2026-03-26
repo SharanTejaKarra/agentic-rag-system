@@ -89,25 +89,25 @@ def _resolve_via_vector(
 ) -> Chunk | None:
     """Fall back to vector search for the reference."""
     try:
-        from src.retrieval.shared import get_encoder, get_qdrant
+        from src.retrieval.shared import get_encoder, get_chroma
         encoder = get_encoder()
-        qdrant = get_qdrant()
+        chroma = get_chroma()
     except Exception:
-        logger.exception("Failed to connect to Qdrant for cross-ref resolution")
+        logger.exception("Failed to connect to ChromaDB for cross-ref resolution")
         return None
 
     search_text = f"{reference_string} {context}".strip()
     query_vector = encoder.encode(search_text).tolist()
 
     try:
-        hits = qdrant.search(
-            collection=settings.qdrant_collection_name,
+        hits = chroma.search(
+            collection=settings.chroma_collection_name,
             query_vector=query_vector,
             filters={"section_ref": section} if section else None,
             limit=3,
         )
     except Exception:
-        logger.exception("Qdrant search failed for cross-ref '%s'", reference_string)
+        logger.exception("ChromaDB search failed for cross-ref '%s'", reference_string)
         return None
 
     if not hits:

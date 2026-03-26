@@ -100,8 +100,8 @@ def sample_state(sample_chunks: list[Chunk]) -> AgentState:
 
 
 @pytest.fixture()
-def mock_qdrant(sample_chunks: list[Chunk]):
-    """Patch QdrantManager so tests never touch a real Qdrant instance."""
+def mock_chroma(sample_chunks: list[Chunk]):
+    """Patch ChromaManager so tests never touch a real ChromaDB instance."""
     hits = [
         {
             "id": c.id,
@@ -119,7 +119,7 @@ def mock_qdrant(sample_chunks: list[Chunk]):
     mock_manager.search.return_value = hits
 
     with patch(
-        "src.retrieval.qdrant_client.QdrantManager", return_value=mock_manager
+        "src.retrieval.chroma_client.ChromaManager", return_value=mock_manager
     ) as patched:
         patched.return_value = mock_manager
         yield mock_manager

@@ -25,13 +25,13 @@ class TestVectorSearchReturnsChunks:
 
     def test_returns_list_of_chunks(self):
         hits = _make_hits(3)
-        mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = hits
+        mock_chroma = MagicMock()
+        mock_chroma.search.return_value = hits
 
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+        with patch("src.retrieval.shared.get_chroma", return_value=mock_chroma), \
              patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
@@ -43,13 +43,13 @@ class TestVectorSearchReturnsChunks:
 
     def test_chunk_fields_populated(self):
         hits = _make_hits(1)
-        mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = hits
+        mock_chroma = MagicMock()
+        mock_chroma.search.return_value = hits
 
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+        with patch("src.retrieval.shared.get_chroma", return_value=mock_chroma), \
              patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
@@ -63,38 +63,38 @@ class TestVectorSearchReturnsChunks:
 
 
 class TestVectorSearchWithFilters:
-    """Filters are passed to Qdrant correctly."""
+    """Filters are passed to ChromaDB correctly."""
 
     def test_section_filter_translated(self):
-        mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = []
+        mock_chroma = MagicMock()
+        mock_chroma.search.return_value = []
 
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+        with patch("src.retrieval.shared.get_chroma", return_value=mock_chroma), \
              patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
             vector_search("test", filters={"section": "4.2"})
 
-        call_kwargs = mock_qdrant.search.call_args
+        call_kwargs = mock_chroma.search.call_args
         assert call_kwargs[1]["filters"] == {"section_ref": "4.2"}
 
     def test_entity_type_filter_translated(self):
-        mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = []
+        mock_chroma = MagicMock()
+        mock_chroma.search.return_value = []
 
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+        with patch("src.retrieval.shared.get_chroma", return_value=mock_chroma), \
              patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
             vector_search("test", filters={"entity_type": "person"})
 
-        call_kwargs = mock_qdrant.search.call_args
+        call_kwargs = mock_chroma.search.call_args
         assert call_kwargs[1]["filters"] == {"entity_type": "person"}
 
 
@@ -102,13 +102,13 @@ class TestVectorSearchEmptyResults:
     """Graceful handling of no results."""
 
     def test_returns_empty_list(self):
-        mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = []
+        mock_chroma = MagicMock()
+        mock_chroma.search.return_value = []
 
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+        with patch("src.retrieval.shared.get_chroma", return_value=mock_chroma), \
              patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
@@ -117,17 +117,17 @@ class TestVectorSearchEmptyResults:
         assert result == []
 
     def test_no_filters_when_empty_filter_dict(self):
-        mock_qdrant = MagicMock()
-        mock_qdrant.search.return_value = []
+        mock_chroma = MagicMock()
+        mock_chroma.search.return_value = []
 
         mock_encoder = MagicMock()
         mock_encoder.encode.return_value = MagicMock(tolist=lambda: [0.1] * 384)
 
-        with patch("src.retrieval.shared.get_qdrant", return_value=mock_qdrant), \
+        with patch("src.retrieval.shared.get_chroma", return_value=mock_chroma), \
              patch("src.retrieval.shared.get_encoder", return_value=mock_encoder):
             from src.tools.vector_search import vector_search
 
             vector_search("test", filters={})
 
-        call_kwargs = mock_qdrant.search.call_args
+        call_kwargs = mock_chroma.search.call_args
         assert call_kwargs[1]["filters"] is None

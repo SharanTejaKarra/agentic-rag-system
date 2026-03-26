@@ -1,6 +1,6 @@
 # Architecture
 
-Agentic RAG system for legal document retrieval and question answering, built with LangGraph and backed by Qdrant (vector search) and Neo4j (knowledge graph).
+Agentic RAG system for legal document retrieval and question answering, built with LangGraph and backed by ChromaDB (vector search) and Neo4j (knowledge graph).
 
 ## Directory Structure
 
@@ -33,7 +33,7 @@ agentic-rag-system/
 │   │   └── edges.py         - Conditional routing logic between nodes
 │   ├── tools/
 │   │   ├── __init__.py
-│   │   ├── vector_search.py       - Semantic search over Qdrant
+│   │   ├── vector_search.py       - Semantic search over ChromaDB
 │   │   ├── graph_query.py         - Cypher queries against Neo4j
 │   │   ├── cross_reference.py     - Follows section cross-references
 │   │   ├── sub_question.py        - Decomposes complex queries into sub-questions
@@ -42,7 +42,7 @@ agentic-rag-system/
 │   ├── retrieval/
 │   │   ├── __init__.py
 │   │   ├── strategy.py      - Maps query types to retrieval strategies
-│   │   ├── qdrant_client.py - Qdrant connection manager, search, and upsert
+│   │   ├── chroma_client.py - ChromaDB connection manager, search, and upsert
 │   │   ├── neo4j_client.py  - Neo4j driver wrapper with Cypher helpers
 │   │   └── reranker.py      - Reranks retrieved chunks by relevance
 │   ├── ingestion/
@@ -51,7 +51,7 @@ agentic-rag-system/
 │   │   ├── parser.py        - Parses raw documents (PDF, text) into sections
 │   │   ├── chunker.py       - Splits sections into overlapping chunks
 │   │   ├── embedder.py      - Generates embeddings via HuggingFace models
-│   │   ├── qdrant_loader.py - Loads embedded chunks into Qdrant
+│   │   ├── chroma_loader.py - Loads embedded chunks into ChromaDB
 │   │   ├── graph_builder.py - Builds Neo4j nodes and relationships from sections
 │   │   └── metadata.py      - Extracts and attaches metadata to chunks
 │   ├── llm/
@@ -84,7 +84,7 @@ agentic-rag-system/
 │   └── query.py             - CLI script to run queries against the system
 ├── app.py                   - Streamlit frontend (chat, ingestion, debug views)
 ├── pyproject.toml           - Project metadata, dependencies, tool config
-├── docker-compose.yml       - Qdrant and Neo4j services
+├── docker-compose.yml       - Neo4j service (ChromaDB runs embedded, no server needed)
 ├── .env.example             - Template for environment variables
 ├── .gitignore               - Standard Python gitignore
 └── ARCHITECTURE.md          - This file
@@ -92,7 +92,7 @@ agentic-rag-system/
 
 ## Data Flow
 
-1. **Ingestion**: Documents go through `parser -> chunker -> embedder -> qdrant_loader` and `parser -> graph_builder -> Neo4j`. Metadata is attached at each stage.
+1. **Ingestion**: Documents go through `parser -> chunker -> embedder -> chroma_loader` and `parser -> graph_builder -> Neo4j`. Metadata is attached at each stage.
 
 2. **Query processing**: User query enters the LangGraph state machine:
    - `parse` - classify query type, extract entities
@@ -109,7 +109,7 @@ agentic-rag-system/
 ## Key Dependencies
 
 - **LangGraph** - state machine for the agentic loop
-- **Qdrant** - vector similarity search
+- **ChromaDB** - vector similarity search (embedded, no server needed)
 - **Neo4j** - knowledge graph for entity relationships and document structure
 - **Anthropic Claude** - LLM for query classification, synthesis, and response generation
 - **HuggingFace** - local embedding model (BGE-small)

@@ -16,7 +16,7 @@ logger = get_logger(__name__)
 _lock = threading.Lock()
 
 _encoder: SentenceTransformer | None = None
-_qdrant = None  # QdrantManager, lazy to avoid import-time connection
+_chroma = None  # ChromaManager, lazy to avoid import-time connection
 _neo4j = None   # Neo4jManager, lazy to avoid import-time connection
 
 
@@ -30,15 +30,15 @@ def get_encoder() -> SentenceTransformer:
     return _encoder
 
 
-def get_qdrant():
-    """Return the shared QdrantManager instance."""
-    global _qdrant
-    if _qdrant is None:
+def get_chroma():
+    """Return the shared ChromaManager instance."""
+    global _chroma
+    if _chroma is None:
         with _lock:
-            if _qdrant is None:
-                from src.retrieval.qdrant_client import QdrantManager
-                _qdrant = QdrantManager()
-    return _qdrant
+            if _chroma is None:
+                from src.retrieval.chroma_client import ChromaManager
+                _chroma = ChromaManager()
+    return _chroma
 
 
 def get_neo4j():

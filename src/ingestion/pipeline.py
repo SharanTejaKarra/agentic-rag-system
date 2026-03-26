@@ -2,15 +2,15 @@
 
 Processes documents in stages with progress logging and garbage
 collection between stages to keep memory usage bounded.
+
+Heavy imports are deferred to the functions that need them so the
+full dependency tree is not loaded at startup. This keeps peak
+memory low enough for 8 GB MacBooks.
 """
 
 import gc
 from pathlib import Path
 
-from src.ingestion.parser import parse_document, ALL_SUPPORTED_EXTENSIONS
-from src.ingestion.chunker import hierarchical_chunk
-from src.ingestion.embedder import embed_chunks
-from src.ingestion.qdrant_loader import load_to_qdrant
 from src.utils.logging import get_logger, new_correlation_id
 
 logger = get_logger(__name__)
@@ -24,11 +24,11 @@ def run_ingestion(
     collection_name: str = "legal_docs",
     skip_graph: bool = False,
 ) -> dict:
-    """Orchestrate full ingestion: parse -> chunk -> embed -> load to Qdrant + build graph.
+    """Orchestrate full ingestion: parse -> chunk -> embed -> load to ChromaDB + build graph.
 
     Args:
         input_dir: Path to directory containing documents.
-        collection_name: Qdrant collection to load into.
+        collection_name: ChromaDB collection to load into.
         skip_graph: If True, skip the Neo4j graph building step. Useful when
             Neo4j isn't running or you want faster ingestion.
 
@@ -42,6 +42,8 @@ def run_ingestion(
         raise ValueError(f"Input directory does not exist: {input_dir}")
 
     # Step 1: Parse all documents
+    from src.ingestion.parser import parse_document, ALL_SUPPORTED_EXTENSIONS
+
     all_docs: list[dict] = []
     supported = ALL_SUPPORTED_EXTENSIONS
     files = sorted(
@@ -70,6 +72,7 @@ def run_ingestion(
 
     # Step 2: Chunk documents
     logger.info("Step 2: Chunking documents...")
+    from src.ingestion.chunker import hierarchical_chunk
     chunks = hierarchical_chunk(all_docs)
     logger.info("Created %d chunks", len(chunks))
 
@@ -79,13 +82,15 @@ def run_ingestion(
 
     # Step 3: Generate embeddings (batched internally)
     logger.info("Step 3: Generating embeddings...")
+    from src.ingestion.embedder import embed_chunks
     chunk_embeddings = embed_chunks(chunks)
     logger.info("Generated %d embeddings", len(chunk_embeddings))
 
-    # Step 4: Load to Qdrant (batched internally by qdrant_loader)
-    logger.info("Step 4: Loading to Qdrant...")
-    loaded_count = load_to_qdrant(chunk_embeddings, collection_name)
-    logger.info("Loaded %d chunks to Qdrant collection '%s'", loaded_count, collection_name)
+    # Step 4: Load to ChromaDB (batched internally by chroma_loader)
+    logger.info("Step 4: Loading to ChromaDB...")
+    from src.ingestion.chroma_loader import load_to_chroma
+    loaded_count = load_to_chroma(chunk_embeddings, collection_name)
+    logger.info("Loaded %d chunks to ChromaDB collection '%s'", loaded_count, collection_name)
 
     # Free embeddings, we only need chunks for graph building
     del chunk_embeddings

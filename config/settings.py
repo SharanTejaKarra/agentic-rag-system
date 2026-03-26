@@ -22,10 +22,9 @@ class Settings(BaseSettings):
     local_llm_model: str = "qwen2.5"
     local_llm_max_tokens: int = 4096
 
-    # Qdrant
-    qdrant_url: str = "http://localhost:6333"
-    qdrant_api_key: str = ""
-    qdrant_collection_name: str = "documents"
+    # ChromaDB
+    chroma_persist_dir: str = "./chroma_db"
+    chroma_collection_name: str = "documents"
 
     # Neo4j
     neo4j_uri: str = "bolt://localhost:7687"

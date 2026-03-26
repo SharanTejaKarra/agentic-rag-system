@@ -174,7 +174,7 @@ elif page == "Ingestion":
                 col_a.metric("Files Found", stats["files_found"])
                 col_b.metric("Documents Parsed", stats["documents_parsed"])
                 col_c.metric("Chunks Created", stats["chunks"])
-                col_d.metric("Loaded to Qdrant", stats["loaded"])
+                col_d.metric("Loaded to ChromaDB", stats["loaded"])
 
                 graph_stats = stats.get("graph", {})
                 if graph_stats:

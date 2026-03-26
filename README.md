@@ -1,6 +1,6 @@
 # agentic-rag-system
 
-RAG system for legal/regulatory documents. Built on LangGraph with Qdrant for vector search and Neo4j for the knowledge graph. Supports both Claude API and local Qwen models.
+RAG system for legal/regulatory documents. Built on LangGraph with ChromaDB for vector search and Neo4j for the knowledge graph. Supports both Claude API and local Qwen models.
 
 The idea is pretty simple: legal documents are full of cross-references and nested hierarchies. A basic RAG setup misses most of that structure. So this system classifies your question, picks the right retrieval strategy (vector, graph, or both), follows cross-references automatically, and synthesizes an answer with proper citations.
 
@@ -26,13 +26,15 @@ The whole thing is a LangGraph state machine with conditional edges. If retrieva
 
 ## Setup
 
-### 1. Start the databases
+### 1. Start Neo4j
+
+ChromaDB runs embedded (no server needed), so you only need to start Neo4j:
 
 ```bash
 docker compose up -d
 ```
 
-This gives you Qdrant on `localhost:6333` and Neo4j on `localhost:7687`.
+This gives you Neo4j on `localhost:7687`. ChromaDB stores data locally in `./chroma_db/`.
 
 ### 2. Configure environment
 
@@ -71,7 +73,7 @@ Drop your PDFs/HTML/text files in a folder and run:
 python scripts/ingest.py --input-dir /path/to/docs --collection legal_docs
 ```
 
-This parses the documents, chunks them (preserving section hierarchy), generates embeddings, loads everything into Qdrant, and builds the knowledge graph in Neo4j.
+This parses the documents, chunks them (preserving section hierarchy), generates embeddings, loads everything into ChromaDB, and builds the knowledge graph in Neo4j.
 
 ### 5. Run it
 
@@ -94,7 +96,7 @@ python scripts/query.py --question "Can an applicant appeal a denied permit?"
 
 | Tool | What it does | When it's used |
 |------|-------------|----------------|
-| `vector_search` | Semantic similarity search over Qdrant | Most queries - the default starting point |
+| `vector_search` | Semantic similarity search over ChromaDB | Most queries - the default starting point |
 | `graph_query` | Traverses entities and relationships in Neo4j | Structural questions ("how do X and Y relate?") |
 | `cross_reference` | Resolves references like "see Section 31.020(a)(1)" | Automatically when chunks contain cross-refs |
 | `sub_question` | Breaks complex multi-part questions into simpler ones | Complex queries that need parallel retrieval |
@@ -120,7 +122,7 @@ config/           - settings, prompts
 src/schema/       - state definitions, pydantic models, enums
 src/graph/        - LangGraph nodes, edges, builder
 src/tools/        - the 6 retrieval tools
-src/retrieval/    - Qdrant/Neo4j clients, strategy selector, reranker
+src/retrieval/    - ChromaDB/Neo4j clients, strategy selector, reranker
 src/ingestion/    - document parsing, chunking, embedding, loading
 src/llm/          - LLM client (Claude + local), query expansion
 src/utils/        - citations, reference parsing, logging
@@ -137,13 +139,13 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full file-by-file breakdown.
 pytest
 ```
 
-All tests use mocked Qdrant/Neo4j fixtures, so you don't need running databases to run them.
+All tests use mocked ChromaDB/Neo4j fixtures, so you don't need running databases to run them.
 
 ## Tech stack
 
 - **LangGraph** - agentic loop and state management
 - **LlamaIndex** - document parsing and embedding
-- **Qdrant** - vector database
+- **ChromaDB** - vector database (embedded, no server needed)
 - **Neo4j** - graph database
 - **Anthropic Claude / Qwen** - LLM (switchable)
 - **FastAPI** - API server
